@@ -1,0 +1,95 @@
+v1.12 dual-display timer/display review validation — 8 November 2026
+
+Target: classic ESP32 Dev Module; Arduino ESP32 core 3.3.12 / ESP-IDF 5.5.5.
+GFX 1.12.6, BusIO 1.17.4; TFT additionally uses ST7735/ST7789 1.11.0.
+All results below are software/model checks, not physical device measurements.
+
+OLED
+Sketch uses 339360 bytes (25%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 24716 bytes (7%) of dynamic memory, leaving 302964 bytes for local variables. Maximum is 327680 bytes.
+PASS: 4 portable suites and 86 integration scenarios.
+Integration tests use AddressSanitizer/UndefinedBehaviorSanitizer and 15 s scenario timeouts.
+IRAM: PulseTimer::alarm(gptimer_t*, gptimer_alarm_event_data_t const*, void*)
+IRAM: PulseTimer::commitStart(unsigned long long, unsigned long long, bool)
+IRAM: PulseTimer::setPins(bool, bool)
+IRAM: _frxt_setup_switch
+IRAM: esp_cpu_compare_and_set
+IRAM: esp_timer_get_time
+IRAM: esp_timer_impl_get_counter_reg
+IRAM: gptimer_default_isr
+IRAM: timer_hal_capture_and_get_counter_value
+IRAM: vPortExitCritical
+IRAM: xPortEnterCriticalTimeout
+PASS: audited normal release call chain uses IRAM/ROM; context is in DRAM.
+Indirect sites checked against pinned driver and FreeRTOS implementation.
+Assertion/panic paths excluded; this is not a physical timing measurement.
+PASS: GPIO clicks -> START -> 3 x 5 s -> COMPLETE; rising edges=3; LIVE model
+PASS: GPIO clicks -> START -> 3 x 5 s -> COMPLETE; rising edges=0; DRY
+Instrumented v1.11 baseline:
+shutter HIGH during alarm setup=1
+accepted 2 ms setup stall=1; driver API calls under app lock=3
+after missing IRQ: active=1; shutter HIGH=1; completed=0
+flash writes inside frame transfer=5
+Same fault probes against v1.12:
+shutter HIGH during alarm setup=0
+shutter HIGH during alarm setup=0
+shutter HIGH during alarm setup=0
+accepted 2 ms setup stall=0; driver API calls under app lock=0
+after missing IRQ: active=0; shutter HIGH=0; completed=0
+flash writes inside frame transfer=0
+
+TFT
+Sketch uses 346436 bytes (26%) of program storage space. Maximum is 1310720 bytes.
+Global variables use 24892 bytes (7%) of dynamic memory, leaving 302788 bytes for local variables. Maximum is 327680 bytes.
+PASS: 4 portable suites and 77 integration scenarios.
+Integration tests use AddressSanitizer/UndefinedBehaviorSanitizer and 15 s scenario timeouts.
+IRAM: PulseTimer::alarm(gptimer_t*, gptimer_alarm_event_data_t const*, void*)
+IRAM: PulseTimer::commitStart(unsigned long long, unsigned long long, bool)
+IRAM: PulseTimer::setPins(bool, bool)
+IRAM: _frxt_setup_switch
+IRAM: esp_cpu_compare_and_set
+IRAM: esp_timer_get_time
+IRAM: esp_timer_impl_get_counter_reg
+IRAM: gptimer_default_isr
+IRAM: timer_hal_capture_and_get_counter_value
+IRAM: vPortExitCritical
+IRAM: xPortEnterCriticalTimeout
+PASS: audited normal release call chain uses IRAM/ROM; context is in DRAM.
+Indirect sites checked against pinned driver and FreeRTOS implementation.
+Assertion/panic paths excluded; this is not a physical timing measurement.
+PASS: GPIO clicks -> START -> 3 x 5 s -> COMPLETE; rising edges=3; LIVE model
+PASS: GPIO clicks -> START -> 3 x 5 s -> COMPLETE; rising edges=0; DRY
+Instrumented v1.11 baseline:
+shutter HIGH during alarm setup=1
+accepted 2 ms setup stall=1; driver API calls under app lock=3
+after missing IRQ: active=1; shutter HIGH=1; completed=0
+flash writes inside frame transfer=5
+Same fault probes against v1.12:
+shutter HIGH during alarm setup=0
+shutter HIGH during alarm setup=0
+shutter HIGH during alarm setup=0
+accepted 2 ms setup stall=0; driver API calls under app lock=0
+after missing IRQ: active=0; shutter HIGH=0; completed=0
+flash writes inside frame transfer=0
+
+Shared core comparison: PASS (eight identical files).
+All packaged top-level C++/header files match the source copied into the successful builds.
+Sequence, Controls, Capture, Exposure and TimerPlatform remain unchanged from v1.11.
+PulseTimer and Input changed together in both editions; App/display code is edition-specific.
+Bounded setup retries keep shutter LOW, reject a persistent 2 ms setup stall, and accept a later timely attempt.
+Missing callback: outputs released, sequence stopped, zero frames counted, timer fault latched.
+A missing callback during a screen transfer yields the frame for the foreground deadline check.
+Settings writes and menu actions no longer execute inside the frame transfer.
+Pending rotation remains queued until the main loop; continuous turns cannot starve complete frames.
+TFT framebuffer-allocation fault originally hung the test; now loop/Serial remain usable and capture is blocked.
+OLED allocation failure remains guarded; transient I2C recovery tests also pass.
+Normal modeled GPIO clicks -> three-frame sequence succeeds in LIVE and DRY modes on each edition.
+Driver mock asserts no GPTimer get-count/set-alarm call occurs under the application mux.
+IRAM audit follows reachable instruction boundaries, avoiding false calls from Xtensa alignment padding.
+It checks normal direct call paths and the pinned indirect sites, not worst-case latency or panic paths.
+The final assertion clock check/critical section is in IRAM as well as the release callback.
+No proven driver lock-order deadlock is claimed; the patch removes unnecessary driver work from the app lock.
+No hardware flashing, power measurements or camera/connector timing measurements performed.
+The foreground deadline fallback cannot run during a total CPU, driver or power lockup.
+The intermittent physical freeze and EXIF variation are NOT confirmed resolved.
+SSD1306 128x64 remains the assumed OLED identification.

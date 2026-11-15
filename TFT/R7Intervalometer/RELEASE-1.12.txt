@@ -1,0 +1,75 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.12 — 8 NOVEMBER 2026
+
+TIMER AND DISPLAY FREEZE REVIEW
+This release fixes reproducible software failure paths in v1.11. It does not
+establish the cause of the freeze on the assembled device or guarantee exact
+camera EXIF exposure times. Both OLED and TFT editions contain the changes.
+
+1. TIMER SETUP AND LOCKING
+v1.11 asserted shutter before arming its alarm and called timer driver APIs
+while holding the application's critical-section lock. Setup delays could
+therefore lengthen the command, and driver work extended the locked section.
+The new code keeps shutter LOW while reading/arming the timer. Driver APIs run
+outside the application lock; that lock protects only state and GPIO changes.
+A final IRAM function checks setup time and asserts the output. Setup must fit
+within a 1 ms budget; preemption can cause up to three bounded attempts with
+fresh deadlines. Failed driver calls, expired deadlines or exhausted retries
+leave outputs LOW and latch a timer error until reboot.
+
+The alarm is prepared before assertion, so setup can shorten the command by
+up to approximately 1 ms, plus clock/instruction effects. This tradeoff avoids
+holding shutter open while driver calls run. Diagnostics continue to report
+the actual approximate GPIO-command interval; no guessed camera/EXIF offset is
+subtracted. IRAM release remains independent of screen drawing in normal use.
+
+2. MISSING CALLBACK
+v1.11 waited indefinitely when an armed timer callback did not arrive. With the
+main loop still running, v1.12 checks for an active command more than 20 ms past
+its requested duration. It releases shutter/focus first, stops the sequence,
+records Release timeout, and disables further captures until reboot. The aborted
+frame is not counted. This is a fault response, not a second precision timer.
+It cannot run during a total CPU/driver/power lockup; the 20 ms threshold is not
+a guaranteed maximum release latency. Serial reports TIMER RELEASE TIMEOUT.
+
+3. DISPLAY TRANSFERS
+v1.11 could process menu actions, settings writes and Serial output inside a
+frame transfer. The callbacks are now read-only checks. Pending button/timer
+events interrupt the frame; the main loop handles them before the next redraw.
+Partial frames remain dirty and do not increment the complete-frame counter.
+OLED interruption is distinct from a bus error and does not trigger recovery.
+Rotation stays queued for the main loop, so continuous turning cannot prevent
+every frame from completing. Rotation is handled before click confirmation.
+Manual press/release GPIO actions happen outside drawing and before screen power
+commands. The existing debounce and held-at-boot guard remain in place.
+
+4. TFT FRAMEBUFFER FAILURE
+v1.11 explicitly looped forever if its framebuffer allocation failed. v1.12
+reports the allocation error, skips drawing and blocks capture, while keeping
+Serial/input processing alive. OLED retains its existing allocation guard.
+TFT still has no panel acknowledgement and cannot detect a disconnected panel.
+
+INSTALL
+Use the complete matching OLED or TFT sketch; do not replace App.cpp alone.
+ESP32 Dev Module with esp32 by Espressif Systems 3.3.12 / IDF 5.5.5 is required.
+The audited cache-safe interrupt adapter remains pinned to that platform.
+No wiring or settings-format change. Valid settings, including Dry run, survive.
+No shot starts at boot. Serial at 115200 identifies Firmware 1.12 OLED or TFT.
+
+VALIDATION AND LIMITS
+Both targets compile with all warnings enabled. Host integration tests use
+AddressSanitizer/UndefinedBehaviorSanitizer and bounded scenario timeouts.
+New tests cover setup with outputs LOW, the setup budget and retry, missing IRQ,
+timeout during redraw, deferred settings/rotation, and framebuffer failure.
+Earlier input, Manual Shutter, lock, display recovery, timing and settings tests
+remain included. The compiled normal release and final-assertion paths are
+checked for IRAM/ROM placement, with the callback context in internal DRAM.
+Launch VALIDATION.txt records exact counts, build sizes and fault reproductions.
+No firmware was flashed and no electrical/camera measurements were made here.
+
+AFTER UPLOADING
+Confirm the v1.12 startup banner. First use Dry run ON and verify navigation,
+Manual Shutter duration display and a three-frame sequence. Check Dry run OFF
+before expecting the camera to fire. A timer fault deliberately blocks capture;
+capture its Serial message and reboot before retrying. If the whole device still
+freezes, STARTUP-CHECK.txt describes the USB-only supply comparison and the p/v
+Serial diagnostics. These checks do not assume that the encoder is faulty.

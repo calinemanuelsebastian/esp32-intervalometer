@@ -1,0 +1,79 @@
+INTERVALOMETER v1.12 TFT — UPLOAD GUIDE
+8 November 2026
+
+USE THIS EDITION FOR
+ST7735S color TFT, 80 x 160 pixels, SPI, used in 160 x 80 landscape orientation.
+This is the original eight-pin display. The four-pin SSD1306/SH1106 I2C OLED uses
+the separate OLED edition. An SCL/SDA label alone does not identify the interface.
+
+DISPLAY WIRING (GPIO labels, not header positions)
+  TFT GND -> ESP32 GND
+  TFT VCC -> ESP32 3V3 for the original 3.3 V module
+  TFT SCL -> ESP32 GPIO18 (SPI clock)
+  TFT SDA -> ESP32 GPIO23 (SPI MOSI)
+  TFT RES -> ESP32 GPIO19
+  TFT DC  -> ESP32 GPIO22
+  TFT CS  -> ESP32 GPIO21
+  TFT BLK -> ESP32 GPIO13, only for a logic-controlled backlight input
+  A bare backlight LED needs a suitable driver, not direct GPIO power.
+
+Encoder A/B/SW remain GPIO32/33/27, common to GND. Camera outputs remain 25/26.
+The full optocoupler wiring is in README.md. Display power is 3.3 V, not 5 V VIN.
+
+UPLOAD
+1. Extract the complete R7Intervalometer folder from the TFT ZIP. Keep every
+   supplied .cpp and .h alongside R7Intervalometer.ino. Do not mix editions.
+2. Arduino IDE: install esp32 by Espressif Systems 3.3.12; choose ESP32 Dev Module.
+3. Install Adafruit ST7735 and ST7789 Library with GFX and BusIO dependencies.
+   Verified versions: ST7735/ST7789 1.11.0, GFX 1.12.6, BusIO 1.17.4.
+4. Disconnect the camera, switch external battery power off, connect ESP32 USB.
+5. Open R7Intervalometer.ino and upload. Its short placeholder is intentional;
+   Arduino builds the implementation in App.cpp and PulseTimer.cpp automatically.
+6. Serial Monitor at 115200 baud should identify "Firmware 1.12 TFT".
+
+CHECK
+- Existing capture and menu settings, including Dry run OFF, survive upgrading.
+  Select Dry run ON for a test without camera output. No shot starts at boot.
+- Settings > Theme retains Cyan, Night red, Amber and Green.
+- Diagnostics > LCD colors provides labeled swatches and calibration profiles.
+  Rotate to the profile whose colors match the labels; click saves, hold cancels.
+- Diagnostics > Display checks pixels; Backlight checks automatic on/off.
+- Manual Shutter exposes while held. A 2s hold locks/unlocks an active sequence.
+- Serial ! releases outputs and resets controls; p reads GPIO27, v traces inputs.
+- Panel offsets/orientation constants remain at the top of App.cpp.
+
+This SPI connection has no panel feedback, so it cannot detect an unplugged or
+unresponsive TFT. It does not have the OLED edition's I2C error/retry behavior.
+v1.12 TFT was compiled and host-tested, not flashed or measured on this device.
+See README.md and RELEASE-1.12.txt for controls and timing limitations.
+
+FRACTIONAL EXPOSURE SETTINGS (retained from v1.9)
+- Shot mode = Bulb: Exposure offers 1/10, 1/8, 1/5, 1/4, 1/2 s, then 1-86400 s.
+  There is one Exposure field, with no separate seconds/milliseconds or 0 s choice.
+- Shot mode = Camera: Exposure is a reminder, including 1/100, 1/60, 1/30, etc.
+  Set that speed on the camera yourself. The cable cannot program shutter speed.
+  The editor says "Reminder: set camera"; Home shows "Set camera: <speed>".
+- Trigger pulse still uses ms because it controls contact duration, not the camera
+  exposure. Changing the reminder does not change this pulse or the Gap setting.
+- Saved custom Bulb times survive unchanged. Opening the editor and saving without
+  turning keeps the exact old value; turning chooses the next offered duration.
+
+TIMED RELEASE UPDATE (v1.10)
+Use ESP32 board package 3.3.12 exactly; other core versions are rejected.
+Keep TimerPlatform.h and both PulseTimer files with the complete sketch.
+Serial should also print: Trigger release: cache-safe IRAM interrupt ready.
+The fix addresses flash-cache deferral of the release IRQ. It has not been
+physically measured on the assembled device; EXIF is not a GPIO measurement.
+
+STARTUP / INPUT UPDATE v1.11
+Home shows SW:1 released / SW:0 pressed, plus a Release knob prompt when needed.
+Serial prints the reset reason and input state; p and v work without menu access.
+Retained input checks now yield drawing; the main loop processes the actions.
+See STARTUP-CHECK.txt before assuming that intermittent input is a switch fault.
+
+TIMER / DISPLAY UPDATE v1.12
+Timer setup keeps shutter LOW and uses bounded retries outside the app lock.
+A missing callback stops capture with a timer fault when the loop is running.
+Display transfers yield for button/timer work; no settings saves run inside them.
+TFT allocation failure no longer enters an infinite loop; capture stays disabled.
+Read RELEASE-1.12.txt for the fault behavior and timing limits.

@@ -1,0 +1,46 @@
+INTERMITTENT STARTUP / INPUT CHECK — v1.11
+
+1. KEEP THE FIRMWARE AND PERIPHERALS THE SAME; CHANGE ONLY THE SUPPLY
+Disconnect the battery/converter output from the ESP32. Power the ESP32 only
+through a known-good USB cable and source. Leave the display and encoder connected
+normally to the board; disconnect the camera while testing. Do several complete
+USB power cycles and try the first click and rotation each time. Do not simply
+add USB on top of the battery supply: that can conceal a supply problem.
+If USB-only is consistently reliable, investigate the battery/converter/switch/
+connector supply path before changing button wiring or software again.
+If USB-only fails too, the converter alone does not explain it; continue below.
+
+2. CHECK WITHOUT ENTERING A MENU
+Home SW:1 normally means released; SW:0 means the GPIO reads pressed. Release knob
+means the software is deliberately waiting for a stable release before accepting
+input. A held or LOW-at-boot input must never start a camera exposure automatically.
+If the display itself is frozen, the displayed SW value is stale; use Serial.
+With Serial Monitor open at 115200, send p and then v. No menu access is required.
+Expected released GPIO configuration: IN=1 OUT=0 PU=1 PD=0 RAW=1.
+BTN down=0 stableDown=0 armed=1 busy=0 is the usual released state.
+The trace reports raw A/B and accepted rotation, raw SW, accepted presses/clicks,
+page/frame counters and lock state. If the heartbeat stops too, investigate a
+broader stall/reset/power fault rather than the switch alone.
+Keep the monitor open before reproducing a reset to capture the startup message.
+A BROWNOUT report supports a low-voltage-reset diagnosis; its absence does not
+exclude brief droops, display-only faults or a failure that did not trigger reset.
+
+3. IDENTIFY THE ACTUAL POWER CIRCUIT BEFORE ALTERING IT
+The older wiring guide assumes a protected one-cell battery feeding a 5 V BOOST
+converter, then the ESP32 VIN/5V pin. The fitted converter and output connection
+have not been confirmed. A step-down converter cannot raise a 3.7 V cell to 5 V.
+A plain 3.3 V step-down also loses regulation as battery voltage falls below its
+required input/headroom. Confirm the module and whether it feeds VIN or 3V3.
+Measure the 3V3 rail against GND at the ESP32 during startup and screen updates;
+for a VIN-powered setup also measure VIN against GND. A multimeter can miss short
+dips, so a steady reading alone cannot establish transient stability. Do not
+measure VIN-to-GPIO as if it were a GPIO-to-ground input voltage.
+Do not disable brownout detection to hide resets. Do not select replacement
+power components until the actual converter and its loading are known.
+
+Espressif recommends a 3.3 V supply with at least 500 mA capability for the ESP32
+circuit; a whole dev board plus display also needs suitable current margin.
+This is a supply design guideline, not a measured current for this device.
+https://docs.espressif.com/projects/esp-hardware-design-guidelines/en/latest/esp32/schematic-checklist.html
+Reset-reason API:
+https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32/api-reference/system/misc_system_api.html

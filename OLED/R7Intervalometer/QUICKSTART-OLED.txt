@@ -1,0 +1,89 @@
+INTERVALOMETER v1.12 OLED — UPLOAD GUIDE
+8 November 2026
+
+DISPLAY ASSUMPTION
+The code targets SSD1306, 128 x 64 pixels, I2C. The user's controller is not yet
+confirmed. Four pins do not establish the controller or resolution. This is a
+monochrome UI; a fixed yellow/blue panel remains yellow/blue in its fixed zones.
+
+CONFIRMED WIRING (GPIO labels, not header positions)
+  OLED VIN -> ESP32 3V3
+  OLED GND -> ESP32 GND
+  OLED SCL -> ESP32 GPIO18
+  OLED SDA -> ESP32 GPIO23
+
+The old display's RES, DC, CS and BLK wires are unused: leave them disconnected.
+Encoder A/B/SW remain GPIO32/33/27, common to GND. Camera outputs remain 25/26.
+
+UPLOAD
+1. Extract the whole R7Intervalometer folder from the ZIP into a new location.
+   Keep every supplied .cpp and .h file alongside R7Intervalometer.ino.
+2. Arduino IDE: install esp32 by Espressif Systems 3.3.12; choose ESP32 Dev Module.
+3. Library Manager: install Adafruit GFX Library and its Adafruit BusIO dependency.
+   Wire is part of the ESP32 core. A separate SSD1306 library is not required.
+4. Disconnect the camera, switch battery power off, and connect the ESP32 by USB.
+5. Open R7Intervalometer.ino and upload. Its short placeholder is intentional:
+   the implementation is in App.cpp, which Arduino compiles automatically.
+6. Serial Monitor: 115200 baud. Press EN/reset if needed to see the startup log.
+   Look for "Firmware 1.12 OLED" and the OLED initialization result.
+
+FIRST CHECK
+- The Home page should show INTERVALOMETER and DRY RUN or CAMERA LIVE.
+- Existing settings, including Dry run OFF, survive an upgrade. Select Dry run ON
+  for a test without camera output; no sequence starts automatically at boot.
+- Press to enter the menu. Check encoder navigation, then Diagnostics > Display,
+  Screen sleep and OLED info. Screen sleep should blank/wake the OLED.
+- Brightness replaces Theme. It previews and saves a contrast value of 0-255.
+- Manual Shutter still exposes only while held; sequence lock/unlock is a 2s hold.
+
+IF THE SCREEN STAYS BLANK
+- Startup "ACK/init OK" means the address acknowledged commands. It does not
+  prove that the controller/resolution matches or that the screen displays pixels.
+- "NOT READY" / "OLED unavailable": check power and the four connections with
+  power off. The driver probes 0x3C then 0x3D; triggering is blocked when offline.
+- In Serial Monitor send the lowercase letter o to retry initialization while
+  idle. It does not restart a stopped sequence. The ! command releases outputs
+  and resets controls; p reports GPIO27 and v toggles input tracing.
+- If identified as SH1106 128x64, edit DisplayConfig.h:
+      constexpr bool OLED_SH1106=true;
+  then upload again. This selects its different initialization and column offset.
+- For an SSD1306 128x32 or another controller, this firmware needs a further
+  adaptation. Do not assume a 128x64 configuration is suitable.
+- The module normally provides I2C pull-ups. If absent, fit about 4.7k from SDA to
+  3.3V and from SCL to 3.3V. OLED_I2C_HZ can be reduced to 100000 for wiring tests.
+
+The release was compiled and host-tested, not flashed or tested on the assembled device. It does not establish physical exposure-time accuracy.
+README.md has full controls, timing limitations and wiring. Earlier release notes
+and GHID-1.7-RO.txt describe the previous color TFT and are historical.
+
+FRACTIONAL EXPOSURE SETTINGS (retained from v1.9)
+- Shot mode = Bulb: Exposure offers 1/10, 1/8, 1/5, 1/4, 1/2 s, then 1-86400 s.
+  There is one Exposure field, with no separate seconds/milliseconds or 0 s choice.
+- Shot mode = Camera: Exposure is a reminder, including 1/100, 1/60, 1/30, etc.
+  Set that speed on the camera yourself. The cable cannot program shutter speed.
+  The editor says "Reminder: set camera"; Home shows "Set camera: <speed>".
+- Trigger pulse still uses ms because it controls contact duration, not the camera
+  exposure. Changing the reminder does not change this pulse or the Gap setting.
+- Saved custom Bulb times survive unchanged. Opening the editor and saving without
+  turning keeps the exact old value; turning chooses the next offered duration.
+
+TIMED RELEASE UPDATE (v1.10)
+Use ESP32 board package 3.3.12 exactly; other core versions are rejected.
+Keep TimerPlatform.h and both PulseTimer files with the complete sketch.
+Serial should also print: Trigger release: cache-safe IRAM interrupt ready.
+The fix addresses flash-cache deferral of the release IRQ. It has not been
+physically measured on the assembled device; EXIF is not a GPIO measurement.
+
+STARTUP / INPUT UPDATE v1.11
+Home shows SW:1 released / SW:0 pressed, plus a Release knob prompt when needed.
+Serial prints the reset reason and input state; p and v work without menu access.
+Retained input checks now yield drawing; the main loop processes the actions.
+OLED communication faults now trigger bounded, idle recovery attempts.
+See STARTUP-CHECK.txt before assuming that intermittent input is a switch fault.
+
+TIMER / DISPLAY UPDATE v1.12
+Timer setup keeps shutter LOW and uses bounded retries outside the app lock.
+A missing callback stops capture with a timer fault when the loop is running.
+Display transfers yield for button/timer work; no settings saves run inside them.
+TFT allocation failure no longer enters an infinite loop; capture stays disabled.
+Read RELEASE-1.12.txt for the fault behavior and timing limits.

@@ -1,0 +1,57 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.8 OLED — 4 NOVEMBER 2026
+
+DISPLAY MIGRATION
+- Targets an assumed SSD1306 128x64 I2C OLED. Confirmed supply is 3.3 V; SCL stays
+  on GPIO18 and SDA on GPIO23. Old SPI display pins 13/19/21/22 are unused.
+- DisplayConfig.h permits explicit SH1106 128x64 selection. Controller type is
+  not auto-detected: probing 0x3C/0x3D only establishes an acknowledging address.
+- Native 128x64, one-bit framebuffer and compact menus replace the 160x80 RGB UI.
+  Fixed panel color cannot be changed in firmware. Brightness replaces Theme;
+  its independent saved record defaults to 96/255. Prior capture settings remain.
+- Screen blanking/wake uses OLED commands instead of the old backlight GPIO.
+- OledDisplay.h checks Wire transfers with a 10 ms per-transaction timeout.
+  A reported error marks the display offline and stops/releases camera outputs.
+  Captures remain disabled until display initialization succeeds. An idle Serial
+  o command retries; the main loop does not continuously retry a failed bus.
+  Failure is detected on a transfer, not immediately while the screen is asleep.
+- 16-byte data packets allow manual input service between I2C transactions. A
+  manual press asserts the output before blanking the OLED. Release and Stop
+  release the output before issuing a screen wake command.
+- No exposure-timing algorithm change: v1.7 GPTimer deadline/release and timing
+  statistics remain. Screen migration does not prove the EXIF variation resolved.
+- Existing manual hold, sequence lock, subsecond Bulb, Camera trigger mode,
+  settings migration and Serial input recovery behavior are retained.
+
+INSTALL
+Replace the entire sketch folder, including OledDisplay.h and DisplayConfig.h.
+Open R7Intervalometer.ino; Arduino compiles App.cpp and PulseTimer.cpp itself.
+Install Adafruit GFX and BusIO; Wire is built into the ESP32 core. No separate
+Adafruit SSD1306/SH110X or ST7735 library is required by this release.
+See QUICKSTART-OLED.txt and README.md. Earlier release documents are historical.
+
+VALIDATION
+ESP32 Dev Module; core 3.3.12; GFX 1.12.6; BusIO 1.17.4.
+Compilation with --warnings all passed without warnings.
+Program 336180 bytes (25%); static RAM 24700 bytes (7%).
+Final ELF places PulseTimer::alarm and PulseTimer::setPins in .iram0.text.
+All tests below passed; rendered UI previews were visually inspected.
+3 portable suites and 58 application integration scenarios, including ASan/UBSan
+for integration tests. An optional additional UI export renders all 15 pages plus
+brightness and locked-sequence states for visual inspection at 128x64.
+
+OLED cases cover 0x3C/0x3D, explicit SH1106 offset and pump commands, framebuffer
+byte conversion, brightness preview/cancel/save, sleep/wake, missing display,
+stuck bus, short writes, disconnection during timed/manual exposure and retry.
+Existing timer/lock/input/capture tests remain, including injected IRQ lateness.
+The host transport models time and failures; it is not a physical bus measurement.
+
+Reproduce: python3 tests/run_host_tests.py
+For UI images, create a directory and set OLED_RENDER_DIR to its absolute path.
+No device was flashed and no physical display or camera measurements were made.
+Controller/resolution identification and assembled-device operation still need
+verification. Timed releases retain interrupt/clock limitations documented in
+README.md; manual release still depends on running firmware.
+
+Primary controller implementation references:
+https://github.com/adafruit/Adafruit_SSD1306/blob/master/Adafruit_SSD1306.cpp
+https://github.com/adafruit/Adafruit_SH110x/blob/master/Adafruit_SH1106G.cpp

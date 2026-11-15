@@ -1,0 +1,78 @@
+POWER SWITCH AND ENCLOSURE — UPDATED 4 NOVEMBER 2026
+
+Assumption: one lithium cell, protected TP4056 board with B+/B- and OUT+/OUT-,
+5 V boost converter, ESP32 Dev Module, display powered from ESP32's supply.
+Confirm the actual fitted modules before changing wiring. The reported condition
+that only disconnecting the cell restores operation has not been diagnosed.
+
+NORMAL ON/OFF SWITCH
+Use a maintained/latching power switch in the protected positive supply BEFORE
+the boost converter:
+
+  Cell + -------------------- TP4056 B+
+  Cell - -------------------- TP4056 B-
+
+  TP4056 OUT+ --- ON/OFF ----- Boost IN+
+  TP4056 OUT- ---------------- Boost IN-
+
+  Boost OUT+ (regulated 5 V) - ESP32 5V/VIN
+  Boost OUT- ---------------- ESP32 GND
+  ESP32 3V3/GND -------------- OLED VIN/GND (confirmed 3.3 V supply)
+
+This cuts power to the converter, controller and OLED together. It leaves the cell
+connected to the charger/protection board, so charging remains available with
+the load switched OFF. With a basic TP4056 board, charge with the load OFF; it
+is not a complete simultaneous charge-and-load power-path manager.
+
+Do not bypass the protection by powering the project directly from B+/B-.
+Do not connect protected OUT- to B- externally. Choose a switch rated for the
+converter's battery-side input current and startup surge, not merely the ESP32's
+average current. A GPIO button or ESP32 EN/reset cannot power-cycle the converter.
+
+USB CAN PREVENT A FULL POWER CYCLE
+USB plugged into the ESP32 can power it independently of the battery switch.
+Disconnect it when checking OFF behavior. A generic clone's simultaneous USB and
+external 5 V power isolation is not established. The charging USB and programming
+USB should be physically identifiable in the enclosure.
+
+IF YOU REALLY NEED TO REPLICATE UNPLUGGING THE CELL
+A separate master disconnect can interrupt CELL POSITIVE before the charger's B+
+terminal. All project power must still pass through the protected OUT terminals.
+With charging and programming USB unplugged, this electrically replicates opening
+the battery connection. It also disconnects the battery from charging while OFF.
+If charging USB remains connected, the charger can still provide energy to its
+output/load; opening the battery lead alone is not a guaranteed all-power cutoff.
+
+Therefore the normal user switch should be on protected OUT+ before the boost;
+retain access to a keyed battery connector or a separate service disconnect if
+needed. If only a cell disconnect recovers the device after a proper protected-
+output power cycle, a charger/protection latch or another power-path issue is
+possible. A power switch can provide recovery but does not establish or remove
+the underlying cause.
+
+ENCLOSURE FEATURES TO RESERVE
+- Front: OLED window/bezel and encoder bushing/knob clearance, including full push
+  travel and comfortable finger clearance. Mount the encoder by its bushing when
+  possible so force does not load solder joints.
+- Side: accessible maintained power switch; protected charging USB opening; a
+  separate ESP32 programming USB opening or removable service cover.
+- Cable exit: a clamp/grommet and internal slack so camera-cable pulls do not reach
+  the solder joints. A panel-mounted connector can serve the same purpose.
+- Inside: standoffs matched to the actual PCB holes; insulation/clearance under
+  perfboard joints; battery restraint without crushing a pouch or loading its leads;
+  clearance around charger/converter components for heat dissipation.
+- Service access: battery connector, ESP32 EN/BOOT buttons, and test points should
+  be reachable without cutting or desoldering wires.
+
+No exact printable CAD or cutout dimensions are included because PCB outlines,
+mounting holes, encoder thread, switch body, USB position and battery dimensions
+have not been measured. Measure those actual parts before fixing the enclosure
+size; nominal screen diagonal is not enough to size its window or mounting.
+
+REFERENCES (general guidance; not identification of the user's module revision)
+Espressif DevKitC power inputs:
+https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32/esp32-devkitc/user_guide.html
+Protected TP4056 module maker's connection guide:
+https://shillehtek.com/blogs/shillehtek-product-manuals/18650-tp4056-1a-3-7-4-2v-lipo-battery-charging-board-micro-usb-with-current-protection-manual
+Microchip AN1149, charger/load sharing:
+https://www.microchip.com/en-us/application-notes/an1149

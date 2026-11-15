@@ -1,0 +1,100 @@
+INTERVALOMETRU ESP32 — GHID PENTRU VERSIUNEA 1.7
+2 noiembrie 2026
+
+ÎNLOCUIREA FIRMWARE-ULUI
+Înlocuiește întregul director R7Intervalometer cu cel din arhiva v1.7.
+Deschide R7Intervalometer.ino în Arduino IDE, cu placa ESP32 Dev Module.
+App.cpp, PulseTimer.cpp și toate fișierele .h trebuie să rămână în același
+director. Nu copia doar App.cpp peste o versiune veche.
+Monitorul serial, la 115200 baud, trebuie să afișeze Firmware 1.7.
+Instrucțiunile de biblioteci și alimentare la programare sunt în README.md.
+
+DACĂ ENCODERUL NU MAI COMANDĂ DISPOZITIVUL
+După instalarea v1.7, poți folosi Monitorul serial fără meniul de pe dispozitiv.
+Trimite comenzile separat; Enter este acceptat, dar nu obligatoriu:
+
+  !  oprește secvența, eliberează ieșirile, șterge Lock și reinițializează
+     intrările encoderului. Revine la Home. Eliberează butonul înainte de
+     următoarea apăsare. Comanda întrerupe o expunere în curs.
+  v  activează/dezactivează logul intrărilor și mesajul periodic alive.
+  p  afișează configurația GPIO27 și nivelul RAW citit.
+  e  deschide testul encoderului când nu rulează o secvență.
+
+Cu butonul eliberat, RAW/SW ar trebui să fie 1; apăsat, 0. Logul păstrează
+și contoare press/click, pentru apăsările dintre două mesaje alive.
+lock=1 explică ignorarea intenționată a clicurilor scurte în timpul secvenței;
+apăsarea lungă de circa 2 secunde deblochează comenzile.
+
+Dacă mesajele alive continuă, programul încă procesează bucla principală.
+Dacă RAW se schimbă dar press/click nu cresc, logul permite investigarea
+filtrării și a stării interfeței. Dacă RAW nu se schimbă, această observație
+singură nu identifică defectul: trebuie corelată cu configurația GPIO șiX
+semnalul măsurat. Dacă nici Serial nu răspunde, recuperarea software nu poate
+fi garantată. Cauza blocajului raportat nu este încă demonstrată.
+
+PRECIZIA ȘI EXPUNERILE INEGALE
+Calea de temporizare a fost revizuită:
+- Momentul de referință se citește înainte de activarea ieșirii, astfel încât
+  citirea contorului să nu adauge timp ascuns cu declanșarea deja activată.
+- Rutina de eliberare și scrierea GPIO sunt în IRAM; traseul critic evită
+  apelul GPIO din flash. Poziționarea a fost verificată în programul compilat.
+- Dacă armarea alarmei depășește termenul, ieșirile se eliberează și secvența
+  se oprește cu eroare; nu se așteaptă o alarmă programată în trecut.
+- Timing series raportează numărul de impulsuri măsurate, minimul, maximul
+  și diferența dintre ele, în microsecunde. Serial raportează și abaterea
+  fiecărui impuls și latența maximă la intrarea în întrerupere.
+
+După recuperarea comenzilor, verificarea relevantă este o serie de 20 de
+cadre la 10 s: Shot mode = Bulb, Bulb sec = 10, Bulb ms = 0, Dry run OFF,
+aparat în Bulb cu temporizarea internă dezactivată, focalizare manuală și
+declanșare cadru unic. Păstrează fișierele originale și logul serial.
+După serie, Diagnostics → Timing series, sau comanda s, arată dispersia.
+Comanda r deschide detaliile ultimului impuls.
+
+Compară variația impulsurilor cu variația EXIF. Logul măsoară timpi interni
+din jurul comenzilor GPIO, nu expunerea senzorului și nici tensiunea la jack.
+O verificare independentă a impulsului cere un osciloscop/analizor logic.
+Rezoluția de 1 µs a timerului nu garantează exactitate de 1 µs. Cache-ul flash,
+mascarea întreruperilor, ceasul, optocuploarele și camera rămân relevante.
+Nu s-a introdus o compensare arbitrară de 0,1–0,2 s. Nu este încă demonstrat
+că această versiune elimină variația EXIF de pe dispozitivul tău.
+
+TIMPI SUB O SECUNDĂ
+În Shot mode = Bulb, durata este Bulb sec + Bulb ms:
+  0 sec + 500 ms = 0,500 s; 10 sec + 125 ms = 10,125 s.
+Intervalul comenzii electrice este 0,100 s–24 h. Aparatul poate avea o limită
+Bulb proprie; nu este garantat că reproduce aceste durate la senzor.
+
+Pentru 1/8000 s, selectează Shot mode = Camera și setează timpul PE APARAT,
+în M/Tv sau modul echivalent, dacă aparatul îl oferă. Intervalometrul trimite
+un impuls obișnuit de declanșare (Press ms, implicit 100 ms); jack-ul nu
+transmite valoarea timpului de expunere. Setările Bulb sec/ms sunt ignorate.
+Același mod permite o expunere de 10 s temporizată intern de cameră.
+Folosește cadru unic; Gap trebuie să lase suficient timp pentru expunere și
+salvare. Pauza începe după eliberarea comenzii, nu după confirmarea salvării.
+Pe ecran sunt numărate comenzile trimise, fără confirmarea fotografiilor.
+
+MANUAL SHUTTER
+Filtrarea apăsării pentru declanșarea manuală este 5 ms; în meniuri rămâne
+30 ms. Citirea manuală continuă între benzi mici ale transferului LCD.
+La selectarea Hold to shoot se activează jumătatea de apăsare/focus, pentru
+a ține aparatul pregătit. Acest contact rămâne activ după eliberarea
+declanșatorului, până selectezi Back sau ieși din pagină. Nu se face o
+fotografie doar prin intrarea în pagină. În Dry run ieșirile rămân inactive.
+Autofocusul, temporizatorul aparatului și latența proprie a camerei pot
+produce în continuare întârziere. Pentru comparații, folosește focalizare
+manuală și cadru unic. Apăsarea lungă manuală nu activează Lock.
+
+CULORILE
+Diagnostics → LCD colors (sau comanda c când sistemul este inactiv):
+R = roșu, G = verde, B = albastru, C = cyan, M = magenta, Y = galben;
+W = alb, K = negru. Rotește pentru a previzualiza cele patru profiluri,
+apasă pentru salvare sau ține apăsat pentru anulare.
+Profilul inițial Swap R/B corespunde simptomului Cyan afișat ca galben.
+Calibrarea este separată de Theme și se păstrează după repornire.
+Tema Cyan are accente cyan, text alb și avertizare Dry run galbenă;
+denumirea nu înseamnă că toate elementele interfeței au aceeași culoare.
+
+VALIDARE
+Compilare ESP32 și teste automate pe calculator; fără instalare sau măsurare
+pe dispozitivul fizic în această sesiune. Vezi RELEASE-1.7.txt pentru detalii.

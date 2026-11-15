@@ -1,0 +1,22 @@
+{
+  "tag_name": "v1.12",
+  "name": "v1.12 — Timer and display stability",
+  "draft": true,
+  "prerelease": true,
+  "make_latest": "false",
+  "notes_file": "release/RELEASE-NOTES-v1.12.md",
+  "repository": null,
+  "target_commit": null,
+  "project_license": "MIT",
+  "prepared_date": "2026-11-15",
+  "assets": [
+    "R7Intervalometer-v1.12-OLED-MIT.zip",
+    "R7Intervalometer-v1.12-TFT-MIT.zip",
+    "R7Intervalometer-v1.12-Launch-MIT.zip",
+    "R7Intervalometer-v1.12-MIT-SHA256SUMS.txt"
+  ],
+  "copyright_holder": "Emanuel-Sebastian Călin",
+  "repository_status": "not_created",
+  "suggested_repository_name": "esp32-intervalometer",
+  "packaging_revision": "MIT"
+}

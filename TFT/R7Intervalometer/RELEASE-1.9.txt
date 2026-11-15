@@ -1,0 +1,42 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.9 — 6 NOVEMBER 2026
+
+EXPOSURE EDITOR (BOTH OLED AND TFT)
+- One Exposure setting replaces Bulb sec and Bulb ms. Subsecond choices use
+  fractional shutter-speed notation; longer choices use seconds. No 0 s option.
+- Bulb choices: 1/10, 1/8, 1/5, 1/4, 1/2 s, then 1-86400 s in one-second steps.
+  These fractions are exact with the existing millisecond command resolution.
+  The 100 ms minimum and the hardware timing implementation are unchanged.
+- Valid custom saved durations retain their exact value. Non-reciprocal values
+  use decimal seconds, e.g. 10.375 s. Rotation chooses the next offered value;
+  opening/cancelling or confirming without rotation does not round the setting.
+- In Camera mode, Exposure is a separately saved camera-setting REMINDER:
+  fractional speeds from 1/8000 to 1/2 s, then 1-30 s. Default: 1/100 s.
+  Includes 1/100, 1/60 and 1/30; use only speeds available on the actual camera.
+- The editor says "Reminder: set camera". Home shows "Set camera: <speed>".
+  The remote connection cannot program or read the camera's shutter speed.
+- The reminder does not change trigger duration, Gap, or the retained Bulb setting.
+  "Trigger pulse" replaces the Press ms label; it still controls the 50-1000 ms
+  remote contact hold in Camera mode. Its default is still 100 ms.
+- The new speed record is separate from legacy capture, UI and display settings.
+  Both editions use the same record and the same Exposure.h implementation.
+
+INSTALL
+Replace the complete sketch folder, including the new Exposure.h header.
+Use the OLED or TFT package that matches the actual display. Wiring, libraries,
+manual controls and automatic screen sleep behavior are retained from v1.8.
+Read the edition's QUICKSTART guide and README.md. Older release notes are historical.
+
+VALIDATION
+Four portable suites in each edition include fraction formatting, exact custom
+values, bounds and stepping direction. Four new integration scenarios cover
+editor navigation/cancel/save, persistence, invalid-record fallback, legacy custom
+values and a 1/60 s reminder still sending the independently configured 80 ms pulse.
+Existing timing/lock/manual/input/display tests remain.
+TFT: all 4 portable suites and 58 integration scenarios passed.
+Compilation with ESP32 core 3.3.12 and --warnings all passed without warnings.
+Program 344828 bytes; static RAM 24892 bytes. GFX 1.12.6 / BusIO 1.17.4; ST7735/ST7789 1.11.0.
+Integration tests use AddressSanitizer and UndefinedBehaviorSanitizer.
+PulseTimer::alarm and PulseTimer::setPins remain in .iram0.text in both final ELFs.
+The OLED exposure screens were rendered at 128x64 and visually inspected.
+Reproduce host tests: python3 tests/run_host_tests.py
+No hardware flashing or physical exposure-time validation was performed.

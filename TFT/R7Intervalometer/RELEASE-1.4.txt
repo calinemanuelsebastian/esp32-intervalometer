@@ -1,0 +1,61 @@
+R7 INTERVALOMETER 1.4 — 9 OCTOBER 2026
+
+Full firmware release package. Software has been compiled and tested on the host;
+it has not been flashed or physically validated on the assembled device here.
+
+CHANGES FROM 1.3
+- Manual Shutter carousel entry: debounced press asserts focus + shutter; release
+  ends the output on the first observed open contact. A long hold remains a manual
+  exposure rather than invoking the two-second menu Back/Stop behavior.
+- Entering Manual Shutter does not trigger. Back is a separate selection, chosen
+  after releasing the button. Rotation cannot change selection during a gesture.
+- Dry run applies to manual and timed operation. Existing exposure settings and
+  saved Dry run state are preserved. No automatic shot at startup.
+- Default menu sensitivity is two decoded encoder detents per item, configurable
+  to 1–4 using Settings > Menu clicks. Its data is stored separately from the
+  existing exposure configuration, preserving prior saved settings.
+- Numeric editing is one unit per detent; speed-based acceleration is removed.
+- Manual display shows commanded hold duration. Backlight goes off at shot start,
+  wakes on rotation, times out during the hold, and returns on release.
+- Verbose input logging is OFF by default; on-device diagnostics and serial
+  diagnostics commands remain available. Output transitions still log best-effort.
+- All v1.3 fixes are retained. Sequence.h is unchanged from the reviewed v1.3 engine.
+
+BUILD
+ESP32 Dev Module (esp32:esp32:esp32)
+ESP32 Arduino core 3.3.12; Adafruit ST7735/ST7789 1.11.0;
+Adafruit GFX 1.12.6; Adafruit BusIO 1.17.4.
+Compiled with --warnings all, with no warnings:
+  Program: 331744 bytes (25%)
+  Static RAM: 24588 bytes (7%)
+
+TESTS
+Input, sequence and new controls regression suites: PASS.
+19 application integration scenarios using actual App.cpp and host hardware
+substitutes: PASS with address/undefined-behavior sanitizers:
+  boot, pullup, navigation, ordering, display, sequence_ui, encoder,
+  serial_guard, gpio_reapply, uart_full, all_pages, scroll_sensitivity,
+  manual_hold, manual_dry_tap, manual_boot_and_exit, manual_loop_release,
+  settings_migration, settings_reboot, settings_invalid_ui.
+
+Coverage includes a manual hold longer than two seconds, short taps, first-sample
+release, release bounce without retriggering, held-at-boot suppression, serial
+command exclusion while held, unexpected page exit releasing the output, no shot
+on entering/leaving Manual Shutter, Dry run gating, scroll reversal/reset,
+no numeric acceleration, old settings migration and saved sensitivity reload.
+The portable controls suite checks time rollover for a manual duration.
+
+To reproduce on a computer with Python 3 and a C++ compiler:
+  python3 tests/run_host_tests.py
+
+LIMITS
+Manual focus and shutter are asserted together as a remote full press; the timed
+sequence's 500ms focus lead is not inserted into a manually held exposure.
+The initial press is debounced for 30ms. Output release is serviced in the main
+loop; display/library calls can add latency, and a stopped processor cannot close
+the shutter until it runs or loses power. Actual camera behavior depends on camera
+mode, drive mode, focus and Bulb timer settings. The cable supplies no feedback.
+
+The reported problem requiring a physical battery disconnect has not been
+reproduced or resolved by these changes. See POWER-AND-ENCLOSURE.txt for switch
+placement and the distinction between load OFF and a battery master disconnect.

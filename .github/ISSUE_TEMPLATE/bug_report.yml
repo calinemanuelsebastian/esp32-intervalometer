@@ -1,0 +1,32 @@
+name: Device or firmware problem
+description: Report input, display, capture or timing behavior.
+title: "[Bug] "
+body:
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware version and edition
+      description: Use the startup Serial banner if the menu cannot be opened.
+      placeholder: v1.12 OLED
+    validations:
+      required: true
+  - type: textarea
+    id: hardware
+    attributes:
+      label: Hardware and power
+      description: ESP32 board, display controller/resolution, input pins, and USB or battery/converter supply. Include the ESP32 core version used to compile.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps, expected result and actual result
+      description: Include settings, Dry run state, when the failure begins, and whether rotation, click and Serial still respond.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Serial output or timing evidence
+      description: Attach the startup/reset message and p/v diagnostics if available. For timing, distinguish EXIF from GPIO measurements and include the camera mode. Remove personal data before posting.
+      render: text

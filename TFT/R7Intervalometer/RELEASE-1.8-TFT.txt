@@ -1,0 +1,40 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.8 TFT — 4 NOVEMBER 2026
+
+Companion to v1.8 OLED. The original v1.7 archive is retained unchanged.
+Based on the v1.7 ST7735S edition; retains its 160x80 landscape layout, four
+color themes, panel calibration and GPIO13 backlight control.
+
+SHARED BEHAVIOR
+PulseTimer.cpp/.h, Sequence.h, Input.h, Controls.h and Capture.h are byte-for-byte
+identical to v1.8 OLED. There is no new exposure compensation or timer algorithm.
+The same timed Bulb / camera-timed trigger modes, 5 ms manual press debounce,
+manual hold, 2s sequence lock, settings formats and encoder sensitivity remain.
+
+v1.8 TFT brings action ordering in line with the OLED edition:
+- Manual press asserts shutter before changing the backlight.
+- Manual release applies camera outputs before waking the backlight.
+- Unlocked Stop releases camera outputs before waking the backlight.
+The TFT backlight uses a GPIO write. Applying camera state first keeps display
+updates outside the camera press/release path in both editions.
+
+DISPLAY DIFFERENCES
+TFT uses ST7735S SPI, 80x160 native resolution, 160x80 landscape UI. It has no
+panel acknowledgement/readback on this wiring and cannot detect disconnection.
+OLED uses explicit SSD1306/SH1106 128x64 I2C configuration, fixed monochrome color,
+contrast control and checked I2C transactions. Neither auto-identifies hardware.
+The OLED error-retry path is display-specific and is not copied into TFT firmware.
+
+INSTALL / VALIDATION
+See QUICKSTART-TFT.txt and README.md. Replace the entire sketch folder.
+ESP32 Dev Module; core 3.3.12; ST7735/ST7789 1.11.0; GFX 1.12.6; BusIO 1.17.4.
+Build with --warnings all passed without warnings: program 343636 bytes (26%),
+static RAM 24876 bytes (7%). All 54 integration cases and 3 portable suites pass,
+with AddressSanitizer/UndefinedBehaviorSanitizer enabled on integration tests.
+Three additional integration cases assert camera state at the instant the
+backlight GPIO changes during manual press, manual release and Stop. They
+supplement the prior 51 integration cases and 3 portable suites.
+Reproduce: python3 tests/run_host_tests.py
+
+Compilation and tests do not establish physical display operation or exposure
+accuracy. No device was flashed in this preparation. The reported EXIF variation
+and intermittent physical input faults have not been verified resolved on hardware.

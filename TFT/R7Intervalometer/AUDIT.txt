@@ -1,0 +1,183 @@
+HISTORICAL v1.3 AUDIT: line references apply to v1.3, not the current v1.4 source.
+See RELEASE-1.4.txt for current changes and validation.
+
+R7 INTERVALOMETER — LOGIC AUDIT, 3 OCTOBER 2026
+Reviewed baseline: full firmware v1.2. Corrected deliverable: v1.3.
+
+RESULT
+The review found and corrected five concrete behavior/initialization problems.
+None establishes the cause of the reported 0.23 V on released GPIO27. The
+configured GPIO27 input is not intentionally driven LOW anywhere in the source.
+The new p/u serial commands inspect and reapply its configuration on the device,
+without changing the encoder wiring.
+
+SCOPE
+Read every line of App.cpp, Input.h, Sequence.h, the .ino entry file and existing
+tests. Inspected the relevant local ESP32 GPIO/SPI and Adafruit display startup
+paths, including actual pin ownership behavior. Also compared the auxiliary
+R7ButtonIsolation sketch with v1.2 and reviewed EncoderCheck. Those older
+standalone diagnostics are historical and are not the corrected full firmware.
+This was source review, host execution and target compilation, not a hardware
+measurement or proof of correctness for every possible execution.
+
+CONFIRMED FINDINGS AND FIXES
+
+1. Queued rotation was processed AFTER a confirming click.
+   Reproduction: carousel points to START; a turn toward SETTINGS is queued;
+   the release debounce finishes on the same loop iteration. v1.2 starts the
+   sequence before applying the turn. The application integration test reproduces
+   this using the real loop(), pollButton() and click() functions.
+   Fix: process queued rotation before the button event. The same test now opens
+   SETTINGS and leaves the sequence inactive. Events have no individual timestamps;
+   the defined policy when both are pending is rotation before confirmation.
+
+2. Initial output writes were ignored by the tested ESP32 Arduino core.
+   setup() called digitalWrite(25, LOW) and digitalWrite(26, LOW) before pinMode.
+   In core 3.3.12, __digitalWrite rejects writes before GPIO ownership exists.
+   This invalidated the intended preload; it does NOT prove a shutter pulse occurred.
+   Fix: preload LOW via gpio_set_level, configure outputs, then explicitly write LOW.
+   Physical 10k pull-downs still cover the period before setup runs.
+   This concerns GPIO25/26, not the button on GPIO27.
+
+3. A late loop could skip the 500ms focus lead.
+   v1.2, initial delay 2s: start at 0, next tick at 2000. The old code requested
+   focus and shutter simultaneously. The same problem applied after a late gap.
+   Fix: record when focus was first requested; do not request shutter until at
+   least 500ms later. A late loop now lengthens the gap/start delay. Exposure length
+   is still measured from the actual sequence transition, with no catch-up shots.
+   Software-request timing is tested; physical output timing includes loop latency.
+
+4. A pending pause stayed pending after entering PAUSED.
+   Finishing an exposure with pauseRequested=true left that flag set. The running
+   page could say 'Pause after this frame' although the frame had already finished.
+   Fix: clear the flag when the pause takes effect. Resume still waits a full gap.
+
+5. Activity disrupted the timed backlight test.
+   rotate() called activity(), which immediately switched BLK on, even during an
+   OFF second of the diagnostic pattern. It could cause an unintended brief flash.
+   Fix: the backlight test owns the backlight until it exits; loop() restores normal
+   lighting after exit. Rotation no longer forces it on during an OFF interval.
+
+ADDITIONAL DIAGNOSTIC/ROBUSTNESS CHANGES
+- Reapply input pull-ups AFTER all peripheral initialization and wait 1ms before
+  sampling initial button/encoder state. Attach rotation interrupts afterwards.
+  This guards against initialization interactions; none was found in the inspected
+  LCD/SPI paths. It is not evidence those paths caused the observed voltage.
+- Report GPIO27 via gpio_get_io_config: IN, OUT, PU, PD and the sampled RAW level.
+  Boot reports the state after LCD initialization and again after final input setup.
+  Idle-only p reads the state; u reports it, reapplies INPUT_PULLUP, resets the
+  debounce state to the current level, and reports again. Both reject active/paused
+  sequences. These APIs are built/tested with ESP32 Arduino core 3.3.12.
+- Runtime event logging now checks the actual formatted line length against UART
+  space and skips unavailable/oversized lines. It does not deliberately wait for
+  UART space while servicing the sequence. Library locks and SPI can still block.
+- Heartbeats include cumulative presses/clicks. One raw SW sample per second can
+  miss a whole brief click; counters retain accepted-event evidence. The display's
+  raw-pin samples likewise are not an edge recorder.
+
+COVERAGE OF THE FINAL SOURCE (line ranges refer to v1.3)
+
+App.cpp 1-57: includes, pins, constants, arrays, globals, animated-page selection.
+All assigned pins are distinct. GPIO27 is assigned only to ENC_SW. Four-wire SPI
+uses SCK18/MOSI23, MISO disabled, CS21/DC22/RES19; BLK is13. Array sizes agree with
+menu ranges. The 160x80 framebuffer is heap-backed and checked before use.
+
+App.cpp 58-79: encoder ISR, quadrature table and atomic retrieval.
+Tests cover both directions, reversing edges/contact bounce, and an invalid
+simultaneous transition. The main loop and ISR share a critical section for steps.
+The ISR reads A/B only; it never writes GPIO27. No software path permanently
+turns off rotation interrupts in the full firmware. Heavy interrupt traffic can
+still starve foreground work; its occurrence on the user's device is unverified.
+
+App.cpp 80-128: UART logging, GPIO readback, setting references/persistence,
+backlight and camera output application. Camera outputs use the sequence's
+settings snapshot, including dryRun. Shutter is released before focus; focus is
+asserted before shutter. Failed saves retain the RAM value and report a failure.
+Only idle menu editing can save settings. p/u run only while no sequence is active.
+
+App.cpp 129-197: wrap, rotation, all click and hold transitions.
+Menu indexes wrap within array bounds. Numeric changes use int64_t before clamping.
+All setting edits remain separate until confirmation; hold cancels. Home/Running
+rotation wakes the display without changing settings. Encoder-test clicks count
+without leaving the page; hold leaves it. A long hold stops an active sequence.
+
+App.cpp 198-250: button polling, reports and serial commands.
+Raw input is active LOW; no inversion error found. Short actions occur on release.
+Pressed/hold/click events are separate. Serial diagnostics are guarded during
+active/paused runs. The p command does not modify the pin; u intentionally resets
+button state and requires release before a new click if the button is currently LOW.
+
+App.cpp 252-373: drawing helpers and every display page.
+Every accepted interaction sets dirty. Animated pages refresh without interaction.
+Drawing clears/fills a RAM canvas, then performs a synchronous RGB565 transfer.
+The canvas dimensions and configured landscape panel dimensions agree. There is
+no missing dirty assignment found on a supported menu transition. Frames/drawn
+mean transfers returned; neither is acknowledgment from the physical LCD.
+Static pages intentionally do not redraw indefinitely without a state change.
+
+App.cpp 375-406: complete initialization, settings load, SPI/LCD/input setup.
+Saved data is accepted only for the expected size, magic and range checks.
+Invalid/missing data leaves defaults. No shot starts at boot. Initial output
+ordering is corrected. The final pull-up configuration and button initial state
+are now established after display initialization. A LOW at startup still waits
+for a debounced release, deliberately preventing an accidental startup action.
+
+App.cpp 408-433: every main-loop branch and ordering.
+Service sequence/output first, then phase/backlight changes, serial input,
+rotation, button, heartbeat, timed backlight policy, bounded redraw and 1ms yield.
+The camera state machine has no exposure-length blocking delay. Display/library
+calls still take time, so this is not an independent hardware exposure timer.
+
+Input.h 1-41: all debounce state and redraw policy.
+Verified normal press/release, bounce, release near the long-hold threshold,
+one-shot holds, held-at-boot suppression and recovery, millis rollover, dark-screen
+redraw suppression and the refresh cap. No permanent button lockout found after a
+stable release. A 30ms release is needed; reading LOW continuously does not produce
+repeated clicks. No change to this handler was required by the current audit.
+
+Sequence.h 1-90: settings validation and every sequence transition.
+Verified initial delay, minimum focus lead, exposure boundaries, actual closed
+interval, finite/unlimited sequences, pause/cancel/resume/stop, final-frame priority,
+late servicing, maximum allowed exposure and millis rollover. The sequence copies
+settings at start. Unsigned time differences support rollover for the configured
+intervals. A stalled processor cannot release the physical shutter until it runs
+again; software tests cannot make a total freeze safe.
+
+R7Intervalometer.ino 1: intentionally a placeholder. Arduino compiles App.cpp in
+the same sketch folder; the setup()/loop() definitions are there.
+
+RELATED LIBRARY PATHS CHECKED
+- ESP32 core 3.3.12 esp32-hal-gpio.c: __pinMode, __digitalWrite, __digitalRead.
+  INPUT_PULLUP enables input + pull-up and disables pull-down. digitalRead returns
+  gpio_get_level. No software-latched switch variable is returned as the raw value.
+- SPI.cpp: an already initialized bus makes the display library's later SPI.begin()
+  return early. The explicit MISO=-1 is retained; it does not claim RES/GPIO19.
+- Adafruit_SPITFT.cpp: initSPI operates on its assigned CS/DC/RST/SPI pins;
+  drawRGBBitmap starts/ends a transaction and transfers the canvas synchronously.
+- Adafruit_ST7735.cpp: MINI160x80 initialization and rotation produce the requested
+  160x80 landscape geometry. Actual panel offsets/inversion remain hardware-specific.
+
+VALIDATION
+- ESP32 Dev Module compile: core 3.3.12, ST7735 library 1.11.0, GFX 1.12.6,
+  BusIO 1.17.4. Successful with --warnings all and no warnings.
+- 330980 bytes program storage; 24564 bytes static RAM reported by the compiler.
+- Input regression suite: PASS.
+- Extended sequence regression suite: PASS.
+- 11 application integration scenarios: PASS, built with address/undefined-behavior
+  sanitizers. Scenarios: boot, pullup, navigation, ordering, display, sequence_ui,
+  encoder, serial_guard, gpio_reapply, uart_full, all_pages.
+- Four integration regressions were reproduced against v1.2 before correction:
+  ignored startup writes, queued-input ordering, backlight interference, stale pause.
+  A separate delayed-focus comparison also reproduces the old missing lead.
+- The pullup test deliberately simulates a peripheral clearing GPIO27's pull-up
+  and verifies final setup restores it. This is fault injection, not evidence the
+  real display library actually does so.
+- Host display substitutes check control flow, not rendered pixels or electrical
+  behavior. No ESP32 was flashed and no camera was connected by this task.
+
+BUTTON CONCLUSION
+There is still no confirmed software explanation for the measured 0.23V released
+and 0V pressed. Source review is not a measurement of the running board. Use the
+new p readback to obtain evidence: expected input configuration IN=1 OUT=0 PU=1
+PD=0. RAW depends on the actual voltage. If configuration differs, u gives a
+controlled before/after comparison without changing wiring or replacing the switch.

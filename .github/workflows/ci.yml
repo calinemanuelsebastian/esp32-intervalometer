@@ -1,0 +1,57 @@
+name: Firmware checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Shared core and host regression suites
+        env:
+          CXX: clang++
+        run: python3 tools/verify_editions.py --test
+
+  esp32-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        edition: [OLED, TFT]
+    env:
+      ARDUINO_DIRECTORIES_DATA: ${{ github.workspace }}/.arduino/data
+      ARDUINO_DIRECTORIES_DOWNLOADS: ${{ github.workspace }}/.arduino/downloads
+      ARDUINO_DIRECTORIES_USER: ${{ github.workspace }}/.arduino/user
+      EDITION: ${{ matrix.edition }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: arduino/setup-arduino-cli@81d310742121c928ea9c8bbd407b4217b432ae02 # v2.0.0
+        with:
+          version: '1.3.1'
+      - name: Install pinned core and display libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@3.3.12
+          arduino-cli lib update-index
+          arduino-cli lib install --no-deps "Adafruit BusIO@1.17.4" "Adafruit GFX Library@1.12.6"
+          if [ "$EDITION" = "TFT" ]; then
+            arduino-cli lib install --no-deps "Adafruit ST7735 and ST7789 Library@1.11.0"
+          fi
+      - name: Compile and check normal timer paths in IRAM
+        run: |
+          python3 tools/build_firmware.py "$EDITION" \
+            --objdump .arduino/data/packages/esp32/tools/esp-x32/2601/bin/xtensa-esp32-elf-objdump

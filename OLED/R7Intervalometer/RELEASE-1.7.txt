@@ -1,0 +1,95 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.7 — 2 NOVEMBER 2026
+
+Compiled and host-tested. Not uploaded to or physically measured on the user's
+device in this session. Unequal EXIF exposure durations and the reported input
+freeze are not yet confirmed resolved on hardware.
+
+TIMING REVIEW
+- The GPIO assertion previously preceded the first counter read. That read's
+  latency could extend the command before the reference timestamp. The reference
+  now precedes assertion; GPIO timestamp readings still bracket, rather than
+  directly measure, the physical edges. They are not sensor exposure timings.
+- ARDUINO_ISR_ATTR expands to nothing in this stock core configuration. The
+  PulseTimer callback and GPIO helper now use explicit IRAM_ATTR out-of-line
+  definitions, with direct GPIO register writes on ESP32. The final ELF confirms
+  PulseTimer::alarm and PulseTimer::setPins are in .iram0.text. This avoids flash
+  function fetches on the critical GPIO release path.
+- gptimer_get_raw_count is still in .flash.text, and the stock core has
+  CONFIG_GPTIMER_ISR_CACHE_SAFE disabled. The callback performs timestamp readback
+  after releasing the outputs. The complete interrupt chain is not cache-safe;
+  interrupt masking/cache disabling can still defer service. No settings writes
+  are allowed during an active sequence or a manual gesture.
+- Alarm setup now re-reads the timer to reject a deadline already in the past.
+  Failure cancels the alarm, releases both outputs and disables further triggering
+  until reboot. It does not leave a held shutter waiting for a missed alarm.
+- Existing stale-IRQ exclusion, completion ownership, 64-bit timing and no-catchup
+  sequence behavior are retained. No guessed compensation is subtracted from EXIF.
+- Diagnostics > Timing series and Serial report count, missing readings, minimum,
+  maximum and spread, plus maximum captured IRQ-entry lateness in Serial. New
+  sequences reset aggregates. Dry-run results are explicitly marked DRY.
+
+SUBSECOND / CAMERA MODES
+- Bulb sec + Bulb ms allow electrical hold durations from 0.100 s to 24 h. The
+  fractional field adds 0-999 ms; the minimum and maximum totals are normalized.
+  A camera may reject or quantize short Bulb commands; support is not assumed.
+- Shot mode = Camera sends a 50-1000 ms remote press (default 100 ms). Set the
+  exposure time on the camera in M/Tv or its equivalent. The jack cannot transfer
+  a 1/8000 s shutter-speed setting. This mode can also let the camera time 10 s.
+- Bulb duration fields are ignored in Camera mode. The UI counts triggers, without
+  capture acknowledgement. Use single-shot drive and allow enough Gap for exposure
+  and saving; gap starts at remote release, not camera completion.
+- A separate Capture NVS record preserves old whole-second settings. Reverting to
+  older firmware cannot preserve a subsecond-only exposure configuration.
+
+MANUAL SHUTTER / INPUTS
+- Manual press debounce is 5 ms; ordinary menus retain 30 ms and the existing
+  two-second hold behavior. Release is processed at the first observed open contact.
+- Full-frame LCD writes are split into eight-row strips, servicing the manual
+  shooting selection between transfers. Events occurring during drawing keep the
+  dirty flag so a subsequent frame can show the changed state.
+- Selecting Hold to shoot now asserts the focus/half-press contact (LIVE only),
+  keeping the camera ready before shutter press. It remains held after shutter
+  release until Back is selected or the page is exited. Autofocus/self-timer and
+  camera shutter lag remain dependent on camera settings.
+- Serial v enables nonblocking raw input/event/heartbeat logging, including lock
+  state; p reads GPIO27 without needing the encoder. ! stops the sequence, releases
+  outputs, clears lock, reapplies pull-ups and resets button/rotation state. A
+  held button must be released before acting again. Recovery cannot service a
+  completely stalled CPU or fix an undiagnosed power fault.
+
+DISPLAY
+- Diagnostics > LCD colors previews Native, Swap R/B, Invert and Swap + invert
+  against labeled R/G/B/C/M/Y/white/black samples. Click saves; hold cancels.
+- Initial Swap R/B calibration addresses the reported cyan->yellow symptom and
+  is stored separately from Theme. No panel offset/rotation change is imposed.
+- Cyan's white body text and yellow Dry run warning remain intentional accents.
+
+INSTALL / VALIDATION
+Replace the entire R7Intervalometer sketch folder. New files Capture.h, Panel.h
+and PulseTimer.cpp must accompany App.cpp and the other headers. Open the .ino;
+Arduino automatically compiles both .cpp files. See GHID-1.7-RO.txt and README.md.
+
+ESP32 Dev Module; core 3.3.12; Adafruit ST7735/ST7789 1.11.0;
+GFX 1.12.6; BusIO 1.17.4. --warnings all: no warnings.
+Program 343556 bytes (26%); static RAM 24876 bytes (7%).
+3 portable suites + 51 application integration scenarios PASS, including
+address/undefined-behavior sanitizers on integration tests.
+
+Ten additional scenarios cover fractional commands, Camera mode, record migration
+and persistence, five-ms manual response, press/release within LCD transfers,
+color mapping/preview/cancel/save, Serial recovery and overdue alarm setup.
+A 20-pulse stress scenario injects 0, 137 and 100000 us IRQ lateness; statistics
+correctly expose the full 100000 us spread. These are simulated delays, not
+measured ESP32 performance. All prior timer, lock, menu and manual tests pass.
+
+Reproduce: python3 tests/run_host_tests.py
+Physical follow-up: recover input, compare a 20-frame 10-second series with the
+new timing report, then independently measure the output waveform if necessary.
+An internal stable duration alone does not establish actual camera exposure.
+
+Primary implementation references:
+https://github.com/espressif/esp-idf/blob/v5.5.5/components/esp_driver_gptimer/Kconfig
+https://github.com/espressif/esp-idf/blob/v5.5.5/components/esp_driver_gptimer/src/gptimer.c
+https://github.com/adafruit/Adafruit-ST7735-Library/blob/master/Adafruit_ST7735.cpp
+https://cam.start.canon/en/C005/manual/html/UG-03_CustomShooting_0070.html
+https://cam.start.canon/en/C005/manual/html/UG-03_CustomShooting_0040.html

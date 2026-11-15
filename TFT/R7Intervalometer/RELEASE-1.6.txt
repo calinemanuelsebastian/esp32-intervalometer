@@ -1,0 +1,81 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.6 — 24 OCTOBER 2026
+
+Complete replacement sketch folder. Compiled and host-tested; not flashed or
+physically tested on the user's ESP32/camera in this workspace.
+
+CHANGES FROM 1.5
+- Hold the encoder button approximately two seconds during an active sequence
+  to toggle Lock/Unlock, including from the sequence controls menu.
+- The running screen shows LOCKED/UNLOCKED and the relevant control hint.
+- While locked, a short press or rotation only wakes the display. It cannot
+  navigate, pause, resume or stop. Unlock, open the menu and select Stop now
+  to stop. This replaces the old long-hold-to-stop shortcut.
+- Each continuous hold toggles once. Release does not also select an item.
+- The exposure deadline is unaffected. Lock survives delay, exposure, gap and
+  paused phases, and clears at completion, stop, timer failure or reboot.
+  New sequences start unlocked. The lock is never written to flash.
+- A gesture beginning in a sequence is consumed if the sequence ends before
+  that gesture finishes, even when completion falls within press debounce.
+  It cannot accidentally become a Home/Back command after the last frame.
+- Manual Shutter retains hold-to-expose. Holding longer than two seconds does
+  not lock controls or latch the shutter. Release still closes the outputs.
+- Home-screen branding is now INTERVALOMETER. The device's purpose is general
+  photography, with astrophotography as the builder's primary application.
+- Documentation clarifies that a 2.5 mm TRS plug alone does not guarantee
+  camera compatibility: contact assignments, electrical behavior and remote
+  shutter operation must match. The builder reported testing on a Canon R7;
+  other camera models have not been physically validated here.
+
+Hardware-timed release, Timing diagnostics, themes, wiring and stored settings
+are retained from 1.5. The historical R7Intervalometer sketch/folder name and
+preference namespace remain to preserve the existing installation workflow.
+
+INSTALL
+Replace the entire R7Intervalometer folder, then open R7Intervalometer.ino in
+Arduino IDE. The small .ino is intentional; App.cpp holds the implementation.
+Keep all headers alongside it. Serial Monitor at 115200 reports Firmware 1.6.
+See README.md for wiring, setup and controls. Older release notes are historical.
+
+BUILD
+ESP32 Dev Module (esp32:esp32:esp32)
+ESP32 Arduino core 3.3.12; Adafruit ST7735/ST7789 1.11.0;
+Adafruit GFX 1.12.6; Adafruit BusIO 1.17.4.
+Compiled with --warnings all, no warnings:
+  Program: 339764 bytes (25%)
+  Static RAM: 24740 bytes (7%)
+Arduino ESP32 core 2.x is not supported by the documented GPTimer build.
+
+HOST VALIDATION
+3 portable suites and 41 real-App.cpp integration scenarios: PASS.
+Application scenarios run with address/undefined-behavior sanitizers.
+
+Eight added scenarios cover:
+- Debounce and the two-second threshold; one toggle per hold; release consumed.
+- Locked clicks/rotation wake only, and the timer deadline remains unchanged.
+- Locking from a menu with Stop selected cannot accidentally stop on release;
+  unlocking and explicitly selecting Stop does close both camera outputs.
+- Lock persists across delay, exposures and gaps, without changing pulse length,
+  clears after the final frame, and stays cleared for a new sequence.
+- Locking while paused and unlocking before resume.
+- Short, long and not-yet-debounced presses across the final frame cannot
+  become post-sequence navigation. A fresh press still works afterwards.
+- Timer alarm failure clears the lock and releases both camera outputs.
+
+Existing scenarios also check that a long manual Bulb hold never locks controls.
+The 33 prior integration scenarios and all portable suites still pass with the
+updated stop control. See RELEASE-1.5.txt for the timer/theme validation scope.
+
+Run: python3 tests/run_host_tests.py
+These simulations establish software behavior, not hardware timing accuracy,
+electrical compatibility with additional cameras or a fix for EXIF variation.
+
+DEVICE CHECK
+First test a three-frame Dry run with the camera disconnected. Lock and unlock
+during the delay, exposure and gap; check that locked controls only wake the
+screen. Test completion while holding the button, then a fresh press afterwards.
+Unlock and use Stop now to check manual stopping. In Manual Shutter, verify that
+a five-second hold still ends on release and never enables Lock/Unlock.
+
+The power-recovery issue reported by the builder remains undiagnosed. A UI lock
+does not address CPU or power faults. Manual shutter release still uses the
+foreground loop; timed release uses the GPTimer interrupt introduced in 1.5.

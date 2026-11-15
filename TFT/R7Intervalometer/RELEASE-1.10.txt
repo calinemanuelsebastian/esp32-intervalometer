@@ -1,0 +1,70 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.10 — 8 NOVEMBER 2026
+
+TRIGGER RELEASE FIX — IDENTICAL IN OLED AND TFT
+The previous timer ISR was in IRAM, but the stock driver's interrupt allocation
+was not marked cache-safe. Flash-cache suspension could therefore defer that
+interrupt and extend the shutter hold. This is a software vulnerability; it has
+not been established as the cause of this particular camera's EXIF variation.
+
+- TimerPlatform.h marks the dedicated GPTimer interrupt as IRAM-safe before it
+  is enabled. Capture is blocked if obtaining/configuring that interrupt fails.
+- The callback releases shutter first, then focus, via direct GPIO registers.
+  It no longer calls the flash-resident gptimer_get_raw_count() or millis().
+- An IRAM-resident esp_timer_get_time() records elapsed command time. Millisecond
+  conversion for sequence scheduling happens later in foreground code.
+- The ISR's context and driver object must be in internal RAM. The build requires
+  the audited driver's IRAM-handler/internal-object/IRAM-clock configuration.
+- Diagnostics report actual timestamp differences, including remaining interrupt
+  delays. There is no fixed offset subtraction and no rounding to the target.
+- The 1 MHz GPTimer, 64-bit deadline, stale-interrupt protection, early Stop,
+  Dry run, camera mode, Manual Shutter and saved settings remain supported.
+
+BUILD REQUIREMENT
+Use esp32 by Espressif Systems 3.3.12 / ESP-IDF 5.5.5, ESP32 Dev Module (classic
+ESP32-WROOM). This release deliberately rejects other core versions/targets.
+The adapter isolates one PRIVATE IDF API, gptimer_get_intr_handle(), then calls
+public esp_intr_set_in_iram(). It never casts a timer handle to a private struct.
+Changing core/SDK requires re-auditing the interrupt call chain and linker map;
+do not remove the build checks simply to compile with another core version.
+This is necessary because the stock core does not enable
+CONFIG_GPTIMER_ISR_CACHE_SAFE even though its driver handler is placed in IRAM.
+Upstream references:
+https://github.com/espressif/esp-idf/blob/v5.5.5/components/esp_driver_gptimer/src/gptimer_priv.h
+https://github.com/espressif/esp-idf/blob/v5.5.5/components/esp_driver_gptimer/include/esp_private/gptimer.h
+https://github.com/espressif/esp-idf/blob/v5.5.5/components/esp_hw_support/intr_alloc.c
+
+SOFTWARE VALIDATION
+Both complete sketches are compiled for the target and run their existing host
+suites with address/undefined-behavior sanitizers, plus six new scenarios each:
+- Flash-cache stall spanning a 5 s deadline: configured IRQ releases at 5.000 s
+  in the model; old allocation policy releases at 5.400 s. This models an injected
+  400 ms deferral after the deadline, not a measurement of the assembled device.
+- Global interrupt masking still produces 5.400 s and diagnostics expose it.
+- The callback still timestamps correctly when the foreground counter API fails.
+- Interrupt-handle and IRAM-marking failures block timed and manual triggering.
+The compiled release callback, GPIO writer, driver ISR, clock and normal call
+chain are checked for IRAM/ROM placement. Host simulation alone cannot prove
+real-time behavior. See the launch package VALIDATION.txt for exact results.
+
+UPGRADE / CHECK
+Extract a new complete sketch folder for the fitted display. Do not overwrite
+just App.cpp; TimerPlatform.h and both PulseTimer files are required. Build with
+the pinned core, upload through Arduino IDE, then open Serial at 115200 baud.
+Expect Firmware 1.10 OLED or Firmware 1.10 TFT, plus:
+  Trigger release: cache-safe IRAM interrupt ready (v1.10).
+Existing settings are retained, including Dry run OFF. Check Dry run before
+starting. No wiring change is needed and no sequence starts automatically.
+For a live check, use hold-to-expose Bulb, manual focus, internal Bulb timer off,
+then collect 20 frames at 5 s. Send r for last timing, s for series statistics.
+If EXIF still differs, compare the GPIO25 pulse AND isolated camera-contact
+closure with independent test equipment; internal logs cannot measure the
+opto/camera response. Do not connect camera ground to ESP32 ground just to test.
+
+LIMITS
+This removes flash-cache masking from the audited timed-release interrupt path.
+It is still an interrupt-driven GPIO release, not a peripheral-driven output
+edge. Global interrupt masking, higher-priority work, clock error or a hardware
+fault can still delay release. Manual Shutter release still uses button polling.
+A 5.000 s command is not a guarantee of 5.000 s sensor exposure or EXIF metadata.
+No camera, assembled device, connector pulse or physical timing was measured
+here. Do not describe this as a hardware-validated precision release yet.

@@ -1,0 +1,85 @@
+R7 INTERVALOMETER 1.5 — 24 OCTOBER 2026
+
+Complete replacement sketch folder. Compiled and host-tested; not flashed or
+physically measured on the user's ESP32/camera in this workspace.
+
+CHANGES FROM 1.4
+- Timed trigger release now runs in a one-shot ESP32 GPTimer interrupt, independent
+  of foreground display transfers, menu handling and normal loop scheduling.
+- 1 MHz free-running counter, 64-bit deadlines, durations up to 24 hours. Each
+  deadline is relative to that shot's trigger assertion. No guessed EXIF offset.
+- The sequence consumes a completion event after the interrupt has released both
+  camera outputs. A stale foreground state cannot reassert a finished pulse.
+- Gap timing uses the release timestamp; a delayed loop preserves a fresh 500 ms
+  focus lead rather than firing catch-up shots. Gap scheduling remains in ms.
+- Stop cancels an outstanding alarm. Interrupts from cancelled shots are ignored,
+  including old IRQs carrying a newly programmed alarm value (checked against the
+  captured timer count). They cannot close a newer timed/manual trigger early.
+- Timer initialization/arming failures close outputs and prevent new triggers.
+  The display reports TIMER ERROR: REBOOT. No fallback to imprecise loop timing.
+- Settings cannot be written to flash during a sequence/manual gesture. The stock
+  ESP32 core can defer interrupts while its flash cache is disabled.
+- Diagnostics > Timing: requested duration, approximate GPIO-command duration,
+  timing error, live/dry status and cancelled-pulse indication. Serial command r
+  opens this screen while idle. Completed pulses are logged without waiting for
+  UART space. These are internal timestamps, not independent measurements.
+- Settings > Theme: Cyan, Night red, Amber, Green. Preview while rotating; press
+  saves; hold cancels. Night red removes white/yellow from normal UI and warnings.
+  Display diagnostic RGB bars remain intentionally colored. No backlight PWM
+  change: darker pixels do not eliminate LCD backlight leakage.
+- Existing exposure/Dry run/menu sensitivity settings remain valid. Theme storage
+  has its own key. Wiring and manual hold-to-shoot behavior are retained.
+
+INSTALL
+Replace the entire R7Intervalometer folder. Open R7Intervalometer.ino in Arduino
+IDE; its placeholder is intentional. Keep App.cpp, Input.h, Sequence.h,
+Controls.h, PulseTimer.h and Themes.h alongside it. See README.md for setup.
+
+BUILD
+ESP32 Dev Module (esp32:esp32:esp32)
+ESP32 Arduino core 3.3.12; Adafruit ST7735/ST7789 1.11.0;
+Adafruit GFX 1.12.6; Adafruit BusIO 1.17.4.
+Compiled with --warnings all, no warnings:
+  Program: 339356 bytes (25%)
+  Static RAM: 24740 bytes (7%)
+The GPTimer integration requires the documented ESP32 core 3.x environment;
+this package has not been built against Arduino ESP32 2.x.
+
+HOST VALIDATION
+3 portable suites and 33 real-App.cpp integration scenarios: PASS.
+Application scenarios run with address/undefined-behavior sanitizers.
+
+New coverage:
+- Live and dry 10-second pulses close while a simulated SPI transfer blocks the
+  main loop across the deadline; pending UI state cannot reassert the output.
+- Simulated 137 us interrupt latency appears in diagnostic readback.
+- Multiple frames, gap anchored to release, late-loop and late-assertion handling.
+- Stop/cancel and stale IRQ exclusion during both manual and subsequent shots.
+- Timer creation, counter-read and alarm-arming failures release outputs.
+- Maximum 24-hour duration using 64-bit counts across millis() rollover.
+- Exclusion of settings writes while timing is active.
+- Theme preview/cancel/save/reload, invalid-record fallback, all page renders
+  under all four palettes, and red-only palette channels in Night red.
+- Timing menu/Serial navigation.
+
+Existing coverage retains boot release/pull-ups, encoder navigation, display
+refresh bounds, pause/resume/stop, Dry run, manual hold/release/bounce/boot-held
+suppression, settings migration, scroll sensitivity and UART congestion.
+
+Run: python3 tests/run_host_tests.py
+The deterministic timer simulator dispatches callbacks during explicit time
+advances and simulated SPI delays. It validates control flow and arithmetic;
+it does not measure hardware interrupt latency, GPIO waveforms or EXIF accuracy.
+
+HARDWARE CHECK
+Use B mode, internal Bulb timer disabled, manual focus and single-shot drive.
+Try 20 frames at 10 seconds and compare EXIF with Diagnostics > Timing or Serial
+Monitor at 115200. A steady ESP32 duration with varying EXIF calls for checking
+camera-side electrical timing and camera behavior, not subtracting a guessed
+constant. Independent waveform measurement is needed to confirm actual timing.
+
+The 1 us counter resolution is not a 1 us accuracy guarantee. Interrupt latency,
+clock tolerance, the optocouplers and camera processing remain relevant. The
+remote cable provides no sensor/EXIF feedback. A complete CPU/power fault can
+still prevent release; this change does not resolve the previously reported
+battery-disconnection recovery issue. Manual release still uses the main loop.

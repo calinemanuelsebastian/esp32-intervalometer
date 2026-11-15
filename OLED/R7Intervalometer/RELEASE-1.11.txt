@@ -1,0 +1,51 @@
+ESP32 PHOTOGRAPHIC INTERVALOMETER 1.11 — 8 NOVEMBER 2026
+
+INPUT / STARTUP RECOVERY UPDATE
+Both editions now sample the button and consume rotation between completed
+screen transfers on every page. Previously only Manual Shutter had that service.
+A host reproduction of a 40 ms press overlapping a redraw registered no press
+or click in either v1.10 edition. It now registers once, without relaxing debounce.
+Rotation is consumed before clicks so a pending turn cannot confirm the old item.
+Page changes mark the next frame dirty; rendering is not called recursively.
+
+OLED: a single I2C error previously latched the screen offline and forced Home
+until reboot or Serial o. The new firmware retries initialization no more often
+than once a second, with the camera outputs released and the button stably open.
+It returns to Home after a full new frame and never resumes an interrupted shot.
+Gestures during recovery are discarded, and release is required before a new
+press. A persistently faulty display still blocks capture. No recovery is attempted
+for failed framebuffer allocation. TFT has no display acknowledgement on its wiring.
+
+DIAGNOSIS WITHOUT A WORKING MENU
+- Home shows SW:1 when GPIO27 is HIGH (normally released), SW:0 when LOW.
+- Release knob appears if the boot/recovery guard still awaits stable release.
+- Serial at 115200 prints the reset reason and button configuration/state at boot.
+  BROWNOUT indicates the reset detector recorded a low-voltage reset; a different
+  reset reason does not prove the supply is stable.
+- p reports the GPIO27 configuration plus debouncer state without navigation.
+  BTN down/stableDown are pressed booleans; GPIO RAW/SW are electrical levels.
+- v enables the heartbeat, raw SW/A/B and accepted input counters/events.
+  ! still stops capture and resets controls; it requires a running main loop.
+
+UNCHANGED
+The v1.10 cache-safe trigger release implementation is byte-identical in both
+editions. It retains the exact board-package pin: ESP32 core 3.3.12 / IDF 5.5.5,
+classic ESP32 Dev Module. Exposure settings, wiring, menus, Manual Shutter,
+sequence lock, Dry run and saved records remain supported. Input.h adds read-only
+status accessors; the debounce/hold algorithm itself is unchanged.
+
+VALIDATION
+Both targets compile and run their portable/integration suites, including short
+clicks during redraw, rotation-before-confirmation, held-at-boot recovery, Serial
+state reports, reset reporting, and all previous timing/manual/lock tests.
+OLED additionally tests startup recovery, fault during a live shot, held-button
+retry deferral, discarded recovery gestures, and bounded persistent-fault retries.
+The compiled timer ISR path is checked again for IRAM/ROM placement.
+See the launch package VALIDATION.txt for counts and build sizes.
+
+IMPORTANT LIMIT
+These tests reproduce software weaknesses, not the cause of the user's physical
+startup failures. Intermittent click AND rotation failures may involve the power
+supply, grounding, an input fault or a wider firmware stall. No device was flashed
+or electrically measured here. This update cannot repair an unstable supply.
+See STARTUP-CHECK.txt for the controlled USB-only comparison and no-menu checks.
