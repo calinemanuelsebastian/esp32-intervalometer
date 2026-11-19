@@ -2,7 +2,14 @@
 
 A standalone photographic intervalometer with one rotary encoder, a display and isolated shutter/focus outputs. It supports timed Bulb sequences, camera-timed shooting and manual press-and-hold operation. It can be used for long exposures, time-lapse and astrophotography.
 
-**Current firmware: v1.12 — proposed pre-release for hardware testing.** Both editions compile and pass the recorded software tests. The reported intermittent device freeze and camera EXIF timing variation have not been confirmed resolved on hardware. See [validation results](VALIDATION.txt) and [release notes](release/RELEASE-NOTES-v1.12.md).
+**Current firmware: v1.12 — pre-release for hardware testing.** Both editions compile and pass the recorded software tests. The reported intermittent device freeze and camera EXIF timing variation have not been confirmed resolved on hardware. See [validation results](VALIDATION.txt) and the [published release notes and downloads](https://github.com/calinemanuelsebastian/esp32-intervalometer/releases/tag/v1.12).
+
+## Enclosure model and CR3 test files
+
+- [Download the enclosure model — Autodesk Fusion `.f3d`](https://github.com/calinemanuelsebastian/esp32-intervalometer/releases/download/v1.12/ESP32.INTERVALOMETER.f3d). Open the editable design in Autodesk Fusion to inspect or modify it and export meshes for printing.
+- [Download the five original CR3 test photographs — ZIP](https://github.com/calinemanuelsebastian/esp32-intervalometer/releases/download/v1.12/ESP32_Intervalometer_5_original_CR3_pentru_GitHub.zip). Includes `0D2A1035.CR3`–`0D2A1039.CR3`, a README describing the 5.0 s exposure test, `exposure_times.csv` and `SHA256SUMS.txt`.
+
+Both downloads are separate assets of the [v1.12 release](https://github.com/calinemanuelsebastian/esp32-intervalometer/releases/tag/v1.12); they are not bundled in the firmware ZIPs. The CR3 files retain their original metadata. Their recorded exposure times do not independently measure the trigger signal, and the supplied archive does not specify the firmware version used for the test.
 
 ## Choose your display
 
@@ -29,7 +36,7 @@ The target is a **classic ESP32-WROOM Dev Module**. Encoder A/B/SW use GPIO32/33
 
 Camera compatibility requires matching remote-contact pinout, polarity and electrical behavior. A **2.5 mm TRS socket alone does not establish compatibility**. Bulb timing requires a camera mode that keeps the exposure open while the shutter contact is held. The cable supplies no camera-state or photograph-confirmation feedback.
 
-The fitted OLED was described as possibly SSD1306; confirm the controller and resolution before selecting its configuration. Four pins alone do not identify it. Photographs and enclosure models are not included in this release preparation.
+The fitted OLED was described as possibly SSD1306; confirm the controller and resolution before selecting its configuration. Four pins alone do not identify it.
 
 ## Install
 
@@ -58,7 +65,7 @@ python3 tools/verify_editions.py --test
 
 The eight shared timer/input/sequence/capture files must remain identical between editions. The recorded v1.12 run passed four portable suites per edition, **86 OLED** and **77 TFT** integration scenarios, both ESP32 builds and the compiled normal timer-path IRAM audit.
 
-[BUILDING.md](BUILDING.md) describes pinned dependencies, target builds and the IRAM check. The GitHub Actions workflow runs host tests and both target builds; its first remote run is pending. It has read-only repository permissions and does not publish releases.
+[BUILDING.md](BUILDING.md) describes pinned dependencies, target builds and the IRAM check. The GitHub Actions workflow runs host tests and both target builds; [all three checks passed for the v1.12 release commit](https://github.com/calinemanuelsebastian/esp32-intervalometer/actions/runs/43759816899). It has read-only repository permissions and does not publish releases.
 
 ## Troubleshooting
 
@@ -67,3 +74,5 @@ Serial `p` reports the switch configuration, `v` toggles input/heartbeat tracing
 ## Project license and third-party material
 
 The original project code and documentation are available under the [MIT License](LICENSE). Copyright (c) 2026 Emanuel-Sebastian Călin. Third-party material retains its own license; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). A copy of the MIT license is included in each downloadable sketch.
+
+No separate license is asserted for the CR3 photographs; the project's MIT license applies to its code and documentation.
